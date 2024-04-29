@@ -1,6 +1,8 @@
 #include "EspMQTTClient.h"
 #include <ArduinoJson.h>
+#include "EmonLib.h"
 #include "ConnectDataCell.h"
+
 
 #define DATA_INTERVAL 1000       // Intervalo para adquirir novos dados do sensor (milisegundos).
                                  // Os dados serão publidados depois de serem adquiridos valores equivalentes a janela do filtro
@@ -15,6 +17,7 @@ byte CONTROLE_SISTEMA_PIN = 14;
 unsigned long dataIntevalPrevTime = 0;      // will store last time data was send
 unsigned long availableIntevalPrevTime = 0; // will store last time "available" was send
 
+EnergyMonitor emon1; 
 
 void setup()
 {
@@ -70,7 +73,9 @@ void availableSignal(){
 }
 
 float readSensor(){
- return 0;
+  double Irms = emon1.calcIrms(1480)/3.0;
+  
+  return Irms;
 }
 
 void metodoPublisher(){
@@ -84,6 +89,8 @@ void metodoPublisher(){
     StaticJsonDocument<300> jsonDoc;
   
     jsonDoc["RSSI"] = WiFi.RSSI();
+    jsonDoc["corrente"] = acumulador/JANELA_FILTRO;
+    
     if(digitalRead(ACIONAMENTO_PIN) == HIGH){
       jsonDoc["estado"] = "ON";
     }
