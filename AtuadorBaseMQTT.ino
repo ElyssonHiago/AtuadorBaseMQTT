@@ -1,6 +1,6 @@
 #include "EspMQTTClient.h"
 #include <ArduinoJson.h>
-#include "ConnectData.h"
+#include "ConnectDataCell.h"
 
 #define DATA_INTERVAL 1000       // Intervalo para adquirir novos dados do sensor (milisegundos).
                                  // Os dados serão publidados depois de serem adquiridos valores equivalentes a janela do filtro
@@ -8,8 +8,8 @@
 #define LED_INTERVAL_MQTT 1000        // Intervalo para piscar o LED quando conectado no broker
 #define JANELA_FILTRO 10         // Número de amostras do filtro para realizar a média
 
-byte TRIG_PIN = 14;
-byte ECHO_PIN = 13;
+byte ACIONAMENTO_PIN = 12;
+byte CONTROLE_SISTEMA_PIN = 14;
 
 
 unsigned long dataIntevalPrevTime = 0;      // will store last time data was send
@@ -21,8 +21,8 @@ void setup()
   Serial.begin(115200);
 
   pinMode(LED_BUILTIN, OUTPUT);
-  pinMode(TRIG_PIN, OUTPUT); // Sets the trigPin as an Output
-  pinMode(ECHO_PIN, INPUT); // Sets the echoPin as an Input
+  pinMode(ACIONAMENTO_PIN, OUTPUT); // Sets the trigPin as an Output
+  pinMode(CONTROLE_SISTEMA_PIN, OUTPUT); // Sets the echoPin as an Input
   
   // Optional functionalities of EspMQTTClient
   //client.enableMQTTPersistence();
@@ -34,10 +34,34 @@ void setup()
   WiFi.mode(WIFI_STA);
 }
 
-// This function is called once everything is connected (Wifi and MQTT)
-// WARNING : YOU MUST IMPLEMENT IT IF YOU USE EspMQTTClient
+void atuador(const String payload){
+  
+  if(payload == "ON"){
+    digitalWrite(ACIONAMENTO_PIN, HIGH); //Liga o dispositivo
+    client.publish(topic_name, "ON");
+  }
+  else{
+    digitalWrite(ACIONAMENTO_PIN, LOW); //Desliga o dispositivo
+    client.publish(topic_name, "OFF");    
+  }
+}
+
+void controleLocal(const String payload){
+  if(payload == "ON"){
+    digitalWrite(CONTROLE_SISTEMA_PIN, HIGH); //Controle pelo sistema
+    client.publish(topic_name+"/controle_sistema", "ON");
+  }
+  else{
+    digitalWrite(CONTROLE_SISTEMA_PIN, LOW); //Controle local
+    client.publish(topic_name+"/controle_sistema", "OFF");    
+  }
+}
+
 void onConnectionEstablished()
 { 
+  client.subscribe(topic_name + "/set", atuador);
+  client.subscribe(topic_name + "/controle_sistema/set", controleLocal);  
+  
   availableSignal();
 }
 
@@ -46,27 +70,7 @@ void availableSignal(){
 }
 
 float readSensor(){
-  const float SOUND_VELOCITY = 0.034;
-  const float CM_TO_INCH     = 0.393701;
-
-  long duration;
-  float distanceCm;
-
-  // Clears the trigPin
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
-  // Sets the trigPin on HIGH state for 10 micro seconds
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
-
-  // Reads the echoPin, returns the sound wave travel time in microseconds
-  duration = pulseIn(ECHO_PIN, HIGH);
-  
-  // Calculate the distance
-  distanceCm = duration * SOUND_VELOCITY/2;
-
-  return distanceCm;
+ return 0;
 }
 
 void metodoPublisher(){
@@ -75,12 +79,17 @@ void metodoPublisher(){
   
   acumulador += readSensor();
 
-  //realização de média
+
   if (amostras >= JANELA_FILTRO){
     StaticJsonDocument<300> jsonDoc;
   
     jsonDoc["RSSI"] = WiFi.RSSI();
-    jsonDoc["nivel"] = acumulador/JANELA_FILTRO;
+    if(digitalRead(ACIONAMENTO_PIN) == HIGH){
+      jsonDoc["estado"] = "ON";
+    }
+    else{
+      jsonDoc["estado"] = "OFF";
+    }
   
     String payload = "";
     serializeJson(jsonDoc, payload);
@@ -88,6 +97,11 @@ void metodoPublisher(){
     client.publish(topic_name, payload); 
     amostras = 0; 
     acumulador = 0;
+
+    if(digitalRead(CONTROLE_SISTEMA_PIN) == HIGH)
+      client.publish(topic_name+"/controle_sistema", "ON");
+    else
+      client.publish(topic_name+"/controle_sistema", "OFF");    
   }
   amostras++;  
 }

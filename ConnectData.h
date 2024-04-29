@@ -1,4 +1,4 @@
-const String topic_name = "/medidor_nivel";
+const String topic_name = "/bomba1";
 
 
 EspMQTTClient client(
