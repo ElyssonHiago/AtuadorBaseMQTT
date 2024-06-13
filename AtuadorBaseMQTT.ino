@@ -1,7 +1,7 @@
 #include "EspMQTTClient.h"
 #include <ArduinoJson.h>
-#include "EmonLib.h"
-#include "ConnectDataIFRN.h"
+
+#include "ConnectDataCell.h"
 
 
 #define DATA_INTERVAL 10000       // Intervalo para adquirir novos dados do sensor (milisegundos).
@@ -10,62 +10,57 @@
 #define LED_INTERVAL_MQTT 1000        // Intervalo para piscar o LED quando conectado no broker
 #define JANELA_FILTRO 1         // Número de amostras do filtro para realizar a média
 
-byte ACIONAMENTO_PIN = 12;
-byte CONTROLE_SISTEMA_PIN = 14;
+byte VALVULA1_PIN = 12;
+byte VALVULA2_PIN = 14;
 
 
 unsigned long dataIntevalPrevTime = 0;      // will store last time data was send
 unsigned long availableIntevalPrevTime = 0; // will store last time "available" was send
 
-EnergyMonitor emon1;
-
 void setup()
 {
+  String availableTopic = topic_name;
+  availableTopic += "/available";
+  
   Serial.begin(115200);
 
   pinMode(LED_BUILTIN, OUTPUT);
-  pinMode(ACIONAMENTO_PIN, OUTPUT); // Sets the trigPin as an Output
-  pinMode(CONTROLE_SISTEMA_PIN, OUTPUT); // Sets the echoPin as an Input
-
-  emon1.current(0, 30 / (3 * 0.75));
+  pinMode(VALVULA1_PIN, OUTPUT); // Sets the trigPin as an Output
+  pinMode(VALVULA2_PIN, OUTPUT); // Sets the echoPin as an Input
 
   // Optional functionalities of EspMQTTClient
   //client.enableMQTTPersistence();
   client.enableDebuggingMessages(); // Enable debugging messages sent to serial output
   client.enableHTTPWebUpdater(); // Enable the web updater. User and password default to values of MQTTUsername and MQTTPassword. These can be overridded with enableHTTPWebUpdater("user", "password").
   client.enableOTA(); // Enable OTA (Over The Air) updates. Password defaults to MQTTPassword. Port is the default OTA port. Can be overridden with enableOTA("password", port).
-  client.enableLastWillMessage("/bomba1/available", "offline");  // You can activate the retain flag by setting the third parameter to true
+  client.enableLastWillMessage(availableTopic.c_str() , "offline");  // You can activate the retain flag by setting the third parameter to true
   //client.setKeepAlive(8);
   WiFi.mode(WIFI_STA);
 }
 
-void atuador(const String payload) {
+void valvula1(const String payload) {
 
   if (payload == "ON") {
-    digitalWrite(ACIONAMENTO_PIN, HIGH); //Liga o dispositivo
-        client.publish(topic_name, "ON");
+    digitalWrite(VALVULA1_PIN, HIGH); //Liga o dispositivo
   }
   else {
-    digitalWrite(ACIONAMENTO_PIN, LOW); //Desliga o dispositivo
-        client.publish(topic_name, "OFF");
+    digitalWrite(VALVULA1_PIN, LOW); //Desliga o dispositivo
   }
 }
 
-void controleLocal(const String payload) {
+void valvula2(const String payload) {
   if (payload == "ON") {
-    digitalWrite(CONTROLE_SISTEMA_PIN, HIGH); //Controle pelo sistema
-    client.publish(topic_name + "/controle_sistema", "ON");
+    digitalWrite(VALVULA2_PIN, HIGH); //Controle pelo sistema
   }
   else {
-    digitalWrite(CONTROLE_SISTEMA_PIN, LOW); //Controle local
-    client.publish(topic_name + "/controle_sistema", "OFF");
+    digitalWrite(VALVULA2_PIN, LOW); //Controle local
   }
 }
 
 void onConnectionEstablished()
 {
-  client.subscribe(topic_name + "/set", atuador);
-  client.subscribe(topic_name + "/controle_sistema/set", controleLocal);
+  client.subscribe(topic_name + "/valv1/set", valvula1);
+  client.subscribe(topic_name + "/valv2/set", valvula2);
 
   availableSignal();
 }
@@ -74,46 +69,20 @@ void availableSignal() {
   client.publish(topic_name + "/available", "online");
 }
 
-float readSensor() {
-  double Irms = emon1.calcIrms(1480);
-
-  return Irms;
-}
-
 void metodoPublisher() {
-  static unsigned int amostras = 0;  //variável para realizar o filtro de média
-  static float acumulador = 0;       //variável para acumular a média
 
-  acumulador += readSensor();
+  StaticJsonDocument<300> jsonDoc;
+  
+  jsonDoc["RSSI"]     = WiFi.RSSI();
+  jsonDoc["valvula1"] = digitalRead(VALVULA1_PIN)==1 ? "ON" : "OFF";
+  jsonDoc["valvula2"] = digitalRead(VALVULA2_PIN)==1 ? "ON" : "OFF";
+  jsonDoc["erro"]     = false;
+  jsonDoc["invalido"] = false;
 
+  String payload = "";
+  serializeJson(jsonDoc, payload);
 
-  if (amostras >= JANELA_FILTRO) {
-    StaticJsonDocument<300> jsonDoc;
-    float corrente = acumulador / JANELA_FILTRO;
-
-    jsonDoc["RSSI"] = WiFi.RSSI();
-    jsonDoc["corrente"] = corrente;
-
-    if (corrente >= 1 ) {
-      jsonDoc["estado"] = "ON";
-    }
-    else {
-      jsonDoc["estado"] = "OFF";
-    }
-
-    String payload = "";
-    serializeJson(jsonDoc, payload);
-
-    client.publish(topic_name, payload);
-    amostras = 0;
-    acumulador = 0;
-
-    if (digitalRead(CONTROLE_SISTEMA_PIN) == HIGH)
-      client.publish(topic_name + "/controle_sistema", "ON");
-    else
-      client.publish(topic_name + "/controle_sistema", "OFF");
-  }
-  amostras++;
+  client.publish(topic_name, payload);
 }
 
 void blinkLed() {
