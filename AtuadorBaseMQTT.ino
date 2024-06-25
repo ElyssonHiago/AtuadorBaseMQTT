@@ -43,11 +43,11 @@ void atuador(const String payload) {
 
   if (payload == "ON") {
     digitalWrite(ACIONAMENTO_PIN, HIGH); //Liga o dispositivo
-        client.publish(topic_name, "ON");
+    client.executeDelayed(1 * 100, metodoPublisher);
   }
   else {
     digitalWrite(ACIONAMENTO_PIN, LOW); //Desliga o dispositivo
-        client.publish(topic_name, "OFF");
+    client.executeDelayed(1 * 100, metodoPublisher);
   }
 }
 
