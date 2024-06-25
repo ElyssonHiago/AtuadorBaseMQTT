@@ -1,7 +1,7 @@
 #include "EspMQTTClient.h"
 #include <ArduinoJson.h>
 
-#include "ConnectDataCell.h"
+#include "ConnectDataIFRN.h"
 
 
 #define DATA_INTERVAL 10000       // Intervalo para adquirir novos dados do sensor (milisegundos).
@@ -46,6 +46,8 @@ void valvula1(const String payload) {
   else {
     digitalWrite(VALVULA1_PIN, LOW); //Desliga o dispositivo
   }
+  
+  client.executeDelayed(1 * 100, metodoPublisher);
 }
 
 void valvula2(const String payload) {
@@ -55,6 +57,8 @@ void valvula2(const String payload) {
   else {
     digitalWrite(VALVULA2_PIN, LOW); //Controle local
   }
+
+  client.executeDelayed(1 * 100, metodoPublisher);
 }
 
 void onConnectionEstablished()
