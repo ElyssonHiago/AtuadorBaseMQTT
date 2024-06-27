@@ -12,6 +12,7 @@
 #define DATA_INTERVAL 10000       // Intervalo para adquirir novos dados do sensor (milisegundos).
 // Os dados serão publidados depois de serem adquiridos valores equivalentes a janela do filtro
 #define AVAILABLE_INTERVAL 5000  // Intervalo para enviar sinais de available (milisegundos)
+#define READ_SENSOR_INTERVAL 2000  // Intervalo para enviar sinais de available (milisegundos)
 #define LED_INTERVAL_MQTT 1000        // Intervalo para piscar o LED quando conectado no broker
 #define JANELA_FILTRO 1         // Número de amostras do filtro para realizar a média
 
@@ -19,12 +20,13 @@
 PN532_I2C pn532_i2c(Wire);
 NfcAdapter nfc = NfcAdapter(pn532_i2c);
 
-byte ACIONAMENTO_PIN = 12;
-byte BUZZER_PIN = 14;
+byte ACIONAMENTO_PIN = 13;
+byte BUZZER_PIN = 12;
 
 
 unsigned long dataIntevalPrevTime = 0;      // will store last time data was send
 unsigned long availableIntevalPrevTime = 0; // will store last time "available" was send
+unsigned long sensorReadTimePrev = 0;        // irá amazenar a última vez que o sensor for lido
 
 String idChave;
 
@@ -50,19 +52,25 @@ void setup()
 
 void atuador(const String payload) {
 
-  if (payload == "ON") {
-    digitalWrite(ACIONAMENTO_PIN, HIGH); //Liga o dispositivo
-    client.executeDelayed(1 * 100, metodoPublisher);
+  if(payload == "authorized"){
+    digitalWrite(ACIONAMENTO_PIN, HIGH);
+    delay(500);
+    digitalWrite(ACIONAMENTO_PIN, LOW);
+    Serial.println("abertura realizada");
   }
-  else {
-    digitalWrite(ACIONAMENTO_PIN, LOW); //Desliga o dispositivo
-    client.executeDelayed(1 * 100, metodoPublisher);
+  else{
+    //Ativar buzzer
+    digitalWrite(BUZZER_PIN, HIGH);
+    delay(500);
+    digitalWrite(BUZZER_PIN, LOW);
+    Serial.println("Sem autorização");
   }
+
 }
 
 void onConnectionEstablished()
 {
-  client.subscribe(topic_name + "/set", atuador);
+  client.subscribe(topic_name +"/"+ client.getMqttClientName(), atuador);
 
   availableSignal();
 }
@@ -104,7 +112,7 @@ void sendChave(){
   String payload = "";
   serializeJson(jsonDoc, payload);
 
-  client.publish(topic_name, payload);
+  client.publish(topic_name+"/acesso", payload);
 
 }
 
@@ -147,8 +155,9 @@ void loop()
     availableIntevalPrevTime = time_ms;
   }
 
-  if(readSensor()){
+  if(readSensor() && (time_ms - sensorReadTimePrev >= READ_SENSOR_INTERVAL) ){
     client.executeDelayed(1 * 100, sendChave);
+    sensorReadTimePrev = time_ms;
   }
 
   blinkLed();
