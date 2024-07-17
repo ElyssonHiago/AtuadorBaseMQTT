@@ -1,6 +1,7 @@
 #include "EspMQTTClient.h"
 #include <ArduinoJson.h>
-#include "ConnectDataCell.h"
+#include "ConnectDataIFRN.h"
+#include "ConfigHA.h"
 
 #define NDEF_DEBUG false
 #include <Arduino.h>
@@ -20,8 +21,10 @@
 PN532_I2C pn532_i2c(Wire);
 NfcAdapter nfc = NfcAdapter(pn532_i2c);
 
+byte RESET_PIN = 14;
 byte ACIONAMENTO_PIN = 13;
 byte BUZZER_PIN = 12;
+byte BLINK_PIN = LED_BUILTIN;
 
 
 unsigned long dataIntevalPrevTime = 0;      // will store last time data was send
@@ -29,16 +32,35 @@ unsigned long availableIntevalPrevTime = 0; // will store last time "available" 
 unsigned long sensorReadTimePrev = 0;        // irá amazenar a última vez que o sensor for lido
 
 String idChave;
+HomeAssistant HA;  //trata da configuuração dos dispositivos no home assistant
 
 void setup()
 {
   Serial.begin(115200);
 
-  nfc.begin(); //inicia o leitor de nfc/rfid
-  
-  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(BLINK_PIN, OUTPUT);
   pinMode(ACIONAMENTO_PIN, OUTPUT); // Sets the trigPin as an Output
-  pinMode(BUZZER_PIN, OUTPUT); // Sets the echoPin as an Input
+  pinMode(BUZZER_PIN, OUTPUT); // Sets the echoPin as an Input  
+  pinMode(RESET_PIN, OUTPUT);
+
+  digitalWrite(RESET_PIN, LOW);
+  delay(1000);
+  digitalWrite(RESET_PIN, HIGH);
+  delay(1000);
+  
+
+  nfc.begin(); //inicia o leitor de nfc/rfid
+  /*
+  while( !WiFi.isConnected() ){
+    digitalWrite(BLINK_PIN, LOW);
+    delay(100);
+    digitalWrite(BLINK_PIN, HIGH);
+    delay(100);
+  }
+  delay(1000);
+  */
+
+
 
   // Optional functionalities of EspMQTTClient
   //client.enableMQTTPersistence();
@@ -52,7 +74,7 @@ void setup()
 
 void atuador(const String payload) {
 
-  if(payload == "authorized"){
+  if(payload == "UNLOCK"){
     digitalWrite(ACIONAMENTO_PIN, HIGH);
     delay(500);
     digitalWrite(ACIONAMENTO_PIN, LOW);
@@ -70,13 +92,17 @@ void atuador(const String payload) {
 
 void onConnectionEstablished()
 {
-  client.subscribe(topic_name +"/"+ client.getMqttClientName(), atuador);
+
+  HA.init();
+  HA.haDiscovery(); 
+  client.subscribe(topic_name +"/"+ client.getMqttClientName()+"/cmd", atuador);
 
   availableSignal();
+
 }
 
 void availableSignal() {
-  client.publish(topic_name + "/available", "online");
+  client.publish(topic_name +"/"+ client.getMqttClientName() + "/available", "online");
 }
 
 bool readSensor() {
@@ -94,11 +120,17 @@ void metodoPublisher() {
   StaticJsonDocument<300> jsonDoc;
 
   jsonDoc["RSSI"] = WiFi.RSSI();
+  jsonDoc["state"] = "LOCKED";
+
+  if( nfc.isInitiated())
+    jsonDoc["erro"] = false;
+  else
+    jsonDoc["erro"] = true;
 
   String payload = "";
   serializeJson(jsonDoc, payload);
 
-  client.publish(topic_name, payload);
+  client.publish(topic_name+"/"+client.getMqttClientName(), payload);
 }
 
 void sendChave(){
@@ -125,17 +157,17 @@ void blinkLed() {
   if ( (WiFi.status() == WL_CONNECTED)) {
     if (client.isMqttConnected()) {
       if ( (time_ms - ledMqttPrevTime) >= LED_INTERVAL_MQTT) {
-        ledStatus = !digitalRead(LED_BUILTIN);
-        digitalWrite(LED_BUILTIN, ledStatus);
+        ledStatus = !digitalRead(BLINK_PIN);
+        digitalWrite(BLINK_PIN, ledStatus);
         ledMqttPrevTime = time_ms;
       }
     }
     else {
-      digitalWrite(LED_BUILTIN, LOW); //liga led
+      digitalWrite(BLINK_PIN, LOW); //liga led
     }
   }
   else {
-    digitalWrite(LED_BUILTIN, HIGH); //desliga led
+    digitalWrite(BLINK_PIN, HIGH); //desliga led
   }
 }
 
