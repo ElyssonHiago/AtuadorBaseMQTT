@@ -1,3 +1,6 @@
+#ifndef CONNECT_DATA_H
+#define CONNECT_DATA_H
+
 const String topic_name = "/bomba1";
 
 
@@ -10,3 +13,5 @@ EspMQTTClient client(
   "TestClient",     // Client name that uniquely identify your device
   1883              // The MQTT port, default to 1883. this line can be omitted
 );
+
+#endif
