@@ -82,6 +82,8 @@ void metodoPublisher() {
   jsonDoc["valvula2"] = digitalRead(VALVULA2_PIN)==1 ? "ON" : "OFF";
   jsonDoc["erro"]     = false;
   jsonDoc["invalido"] = false;
+  jsonDoc["heap"]     = ESP.getFreeHeap();
+  jsonDoc["stack"]    = ESP.getFreeContStack();
 
   String payload = "";
   serializeJson(jsonDoc, payload);
