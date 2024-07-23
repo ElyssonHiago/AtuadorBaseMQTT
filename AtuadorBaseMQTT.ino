@@ -19,9 +19,7 @@ unsigned long availableIntevalPrevTime = 0; // will store last time "available" 
 
 void setup()
 {
-  String availableTopic = topic_name;
-  availableTopic += "/available";
-  
+ 
   Serial.begin(115200);
 
   pinMode(LED_BUILTIN, OUTPUT);
@@ -33,7 +31,7 @@ void setup()
   client.enableDebuggingMessages(); // Enable debugging messages sent to serial output
   client.enableHTTPWebUpdater(); // Enable the web updater. User and password default to values of MQTTUsername and MQTTPassword. These can be overridded with enableHTTPWebUpdater("user", "password").
   client.enableOTA(); // Enable OTA (Over The Air) updates. Password defaults to MQTTPassword. Port is the default OTA port. Can be overridden with enableOTA("password", port).
-  client.enableLastWillMessage(availableTopic.c_str() , "offline");  // You can activate the retain flag by setting the third parameter to true
+  client.enableLastWillMessage(TOPIC_AVAILABLE , "offline");  // You can activate the retain flag by setting the third parameter to true
   //client.setKeepAlive(8);
   WiFi.mode(WIFI_STA);
 }
@@ -70,7 +68,7 @@ void onConnectionEstablished()
 }
 
 void availableSignal() {
-  client.publish(topic_name + "/available", "online");
+  client.publish(TOPIC_AVAILABLE, "online");
 }
 
 void metodoPublisher() {
